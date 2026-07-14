@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAMM Funds</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="core.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  /* BDP editorial system — see docs/research/BDP_DESIGN_DNA.md */
+  :root {
+    --canvas: #e7e4dd; --paper: #f7f5f0; --paper-hover: #f1eee7; --paper-bright: #fcfbf7;
+    --ink: #1b1a17; --muted: #6b665b; --faint: #9c968a; --line: #d9d4c8;
+    --positive: #4d7c0f; --negative: #9f1239;
+    --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    /* legacy aliases */
+    --bg: var(--canvas); --panel: var(--paper); --border: var(--line);
+    --text: var(--ink); --accent: var(--ink); --accent2: var(--muted);
+  }
+  * { box-sizing: border-box; border-color: var(--line); }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--canvas); color: var(--ink);
+         font: 14px/1.55 var(--font-mono); }
+  ::selection { background: var(--ink); color: var(--paper); }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 20px 56px; }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;
+             color: var(--faint); margin: 0 0 10px; }
+  h1 { font-family: var(--font-display); font-size: 34px; font-weight: 500;
+       letter-spacing: -0.025em; line-height: 1; margin: 0 0 6px; }
+  h1 span { display: block; font-family: var(--font-mono); font-size: 13px; font-weight: 400;
+            letter-spacing: 0; color: var(--muted); margin-top: 8px; }
+  .rule { border: none; border-top: 1px solid var(--line); margin: 20px 0 24px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tabs button { background: var(--paper); border: 1px solid var(--line); color: var(--muted);
+                 padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 12px;
+                 font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.15em;
+                 transition: color .15s cubic-bezier(.4,0,.2,1), background-color .15s cubic-bezier(.4,0,.2,1), border-color .15s cubic-bezier(.4,0,.2,1); }
+  .tabs button:hover { background: var(--paper-hover); color: var(--ink); }
+  .tabs button.active { color: var(--paper); border-color: var(--ink); background: var(--ink); }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px;
+          transition: border-color .15s cubic-bezier(.4,0,.2,1); }
+  .card:hover { border-color: var(--faint); }
+  .card .k { color: var(--faint); font-size: 11px; text-transform: uppercase;
+             letter-spacing: 0.15em; margin-bottom: 8px; }
+  .card .v { font-family: var(--font-display); font-size: 22px; font-weight: 500;
+             letter-spacing: -0.02em; color: var(--ink); }
+  .card .v small { font-family: var(--font-mono); color: var(--faint); font-size: 11px; font-weight: 400;
+                   letter-spacing: 0; }
+
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+           padding: 18px; margin-bottom: 20px; }
+  .panel h2 { font-family: var(--font-display); font-size: 19px; font-weight: 500;
+              letter-spacing: -0.02em; margin: 0 0 14px; color: var(--ink); }
+  .panel h2 span { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0; }
+  .controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;
+              color: var(--muted); font-size: 12px; }
+  .controls label { display: flex; gap: 6px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+         background: var(--paper-bright); }
+  .seg button { background: transparent; border: none; color: var(--faint); padding: 5px 12px;
+                cursor: pointer; font-size: 12px; font-family: var(--font-mono);
+                transition: color .15s cubic-bezier(.4,0,.2,1), background-color .15s cubic-bezier(.4,0,.2,1); }
+  .seg button:hover { color: var(--muted); }
+  .seg button.active { background: var(--paper-bright); color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .seg button:disabled { opacity: 0.4; cursor: default; }
+  input[type=number] { width: 60px; background: var(--paper-bright); border: 1px solid var(--line);
+                       color: var(--ink); border-radius: 6px; padding: 4px 8px; font-size: 12px;
+                       font-family: var(--font-mono); }
+  .chart-box { position: relative; height: 340px; }
+  #error { display: none; background: var(--paper); border: 1px solid var(--negative); color: var(--negative);
+           padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; white-space: pre-wrap; }
+  .footnote { color: var(--faint); font-size: 11px; margin-top: -4px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow"><a href="/damm-bdp-preview/" style="color:inherit;text-decoration:none">← DAMM Capital</a> · Fund registry · Live data</p>
+  <h1>DAMM Funds <span>— share price &amp; APR (Lagoon API)</span></h1>
+  <hr class="rule">
+  <div id="error"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="cards" id="cards"></div>
+
+  <div class="panel">
+    <h2 id="price-title">Share price</h2>
+    <div class="chart-box"><canvas id="priceChart"></canvas></div>
+    <p class="footnote">Line: synthetic daily series (linear interpolation at UTC midnights). Dots: real settlement datapoints. No extrapolation past the last settlement.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Period APR <span style="color:var(--muted);font-weight:400">(annualized simple return)</span></h2>
+    <div class="controls">
+      <label>Granularity
+        <span class="seg" id="granularity">
+          <button data-v="daily">Daily</button>
+          <button data-v="weekly" class="active">Weekly</button>
+          <button data-v="monthly">Monthly</button>
+        </span>
+      </label>
+      <label>Buckets
+        <span class="seg" id="bucketmode">
+          <button data-v="calendar" class="active">Calendar</button>
+          <button data-v="fixed">Every 7/30d</button>
+        </span>
+      </label>
+      <label>Rolling window <input type="number" id="window" min="1" step="1" value="4"> bars</label>
+    </div>
+    <div class="chart-box"><canvas id="aprChart"></canvas></div>
+    <p class="footnote">Bar = (p_end/p_start − 1) × 365/days in bucket. Partial edge buckets use their actual day count. Rolling mean is trailing (causal). Note: daily bars between settlements are interpolation plateaus — settlements are ~weekly, so daily granularity shows accrual shape, not new information.</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+const { syntheticDaily, aprBars, rollingMean } = window.DammCore;
+
+/* BDP editorial palette — literals required by Chart.js canvas */
+const C = {
+  ink: '#1b1a17', muted: '#6b665b', faint: '#9c968a',
+  grid: 'rgba(217,212,200,0.6)', positive: '#4d7c0f',
+  positiveFill: 'rgba(77,124,15,0.45)', paperBright: '#fcfbf7', line: '#d9d4c8',
+};
+Chart.defaults.font.family = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace';
+Chart.defaults.font.size = 11;
+Chart.defaults.color = C.faint;
+Chart.defaults.borderColor = C.grid;
+const TOOLTIP_STYLE = {
+  backgroundColor: C.paperBright, titleColor: C.ink, bodyColor: C.ink,
+  borderColor: C.line, borderWidth: 1, displayColors: false,
+};
+
+const VAULTS = [
+  { key: 'dammstable', label: 'DAMMstable', address: '0xE5d6eb448Ac5A762C1ebE8cd1692b9CD08025176',
+    chainId: 42161, decimals: 6, asset: 'USDT0', chain: 'Arbitrum' },
+  { key: 'dammeth', label: 'DAMMeth', address: '0x3c63f3cE75dc83735745CF4e86B63414D95Ee355',
+    chainId: 1, decimals: 18, asset: 'WETH', chain: 'Ethereum', tvlInNative: true },
+];
+const API = 'https://api.lagoon.finance/query';
+const WINDOW_DEFAULTS = { daily: 7, weekly: 4, monthly: 3 };
+
+const state = { vault: VAULTS[0].key, granularity: 'weekly', mode: 'calendar', window: 4, data: {} };
+let priceChart = null, aprChart = null;
+
+// ---------- data ----------
+async function fetchAll() {
+  const parts = VAULTS.map(v => `
+    ${v.key}: vaultByAddress(address: "${v.address.toLowerCase()}", chainId: ${v.chainId}) {
+      name symbol
+      state { pricePerShare totalAssets totalAssetsUsd }
+      stateHistory { pricePerShare(options: {}) { x y } }
+    }`);
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: `{ ${parts.join('\n')} }` }),
+  });
+  if (!res.ok) throw new Error(`Lagoon API HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.errors) throw new Error('Lagoon API: ' + JSON.stringify(json.errors));
+  for (const v of VAULTS) {
+    const raw = json.data[v.key];
+    if (!raw) throw new Error(`No data for ${v.label}`);
+    const scale = 10 ** v.decimals;
+    const points = raw.stateHistory.pricePerShare
+      .map(p => ({ x: p.x, y: Number(p.y) / scale }))
+      .sort((a, b) => a.x - b.x);
+    state.data[v.key] = {
+      meta: v,
+      name: raw.name,
+      currentPps: Number(raw.state.pricePerShare) / scale,
+      tvlNative: Number(raw.state.totalAssets) / scale,
+      tvlUsd: raw.state.totalAssetsUsd,
+      points,
+      daily: syntheticDaily(points),
+    };
+  }
+}
+
+// ---------- formatting ----------
+const fmtDate = t => new Date(t * 1000).toISOString().slice(0, 10);
+const fmtPct = x => (x * 100).toFixed(2) + '%';
+const fmtUsd = x => x == null ? '—' : '$' + Math.round(x).toLocaleString('en-US');
+const fmtAmt = x => x.toLocaleString('en-US', { maximumFractionDigits: x >= 1000 ? 1 : 3 });
+const fmtPps = (x, dec) => x.toFixed(Math.min(dec, 6));
+
+// ---------- render ----------
+function renderTabs() {
+  const el = document.getElementById('tabs');
+  el.innerHTML = '';
+  for (const v of VAULTS) {
+    const b = document.createElement('button');
+    b.textContent = v.label;
+    b.className = v.key === state.vault ? 'active' : '';
+    b.onclick = () => { state.vault = v.key; renderAll(); };
+    el.appendChild(b);
+  }
+}
+
+function renderCards(d) {
+  const first = d.points[0], last = d.points[d.points.length - 1];
+  const sinceInception = last.y / first.y - 1;
+  const cards = [
+    ['Share price', `${fmtPps(d.currentPps, d.meta.decimals)} <small>${d.meta.asset}</small>`],
+    ['Since inception', `${fmtPct(sinceInception)} <small>since ${fmtDate(first.x)}</small>`],
+    ['Total assets', d.meta.tvlInNative
+      ? `${fmtAmt(d.tvlNative)} <small>${d.meta.asset}</small> <small>· ${fmtUsd(d.tvlUsd)}</small>`
+      : fmtUsd(d.tvlUsd)],
+    ['Last settlement', fmtDate(last.x)],
+  ];
+  document.getElementById('cards').innerHTML = cards
+    .map(([k, v]) => `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`)
+    .join('');
+}
+
+function renderPriceChart(d) {
+  document.getElementById('price-title').textContent =
+    `Share price — ${d.meta.label} (${d.meta.asset}, ${d.meta.chain})`;
+  if (priceChart) priceChart.destroy();
+  priceChart = new Chart(document.getElementById('priceChart'), {
+    data: {
+      datasets: [
+        { type: 'line', label: 'Synthetic daily price',
+          data: d.daily.map(s => ({ x: s.t * 1000, y: s.p })),
+          borderColor: C.ink, borderWidth: 1.5, pointRadius: 0, tension: 0 },
+        { type: 'scatter', label: 'Settlements',
+          data: d.points.map(p => ({ x: p.x * 1000, y: p.y })),
+          backgroundColor: C.faint, pointRadius: 3.5, pointHoverRadius: 6 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'nearest', intersect: false },
+      scales: {
+        x: { type: 'time', time: { unit: 'month' }, grid: { color: C.grid }, ticks: { color: C.faint } },
+        y: { grid: { color: C.grid }, ticks: { color: C.faint },
+             title: { display: true, text: `share price (${d.meta.asset})`, color: C.faint } },
+      },
+      plugins: {
+        legend: { labels: { color: C.muted } },
+        tooltip: { ...TOOLTIP_STYLE, callbacks: { label: ctx =>
+          `${ctx.dataset.label}: ${fmtPps(ctx.parsed.y, d.meta.decimals)} ${d.meta.asset}` } },
+      },
+    },
+  });
+}
+
+function renderAprChart(d) {
+  const bars = aprBars(d.daily, state.granularity, state.mode);
+  const aprs = bars.map(b => b.apr * 100);
+  const roll = rollingMean(aprs, state.window);
+  if (aprChart) aprChart.destroy();
+  aprChart = new Chart(document.getElementById('aprChart'), {
+    data: {
+      labels: bars.map(b => fmtDate(b.t0)),
+      datasets: [
+        { type: 'line', label: `Rolling mean (${state.window} bars)`, data: roll,
+          borderColor: C.ink, borderWidth: 1.5, pointRadius: 0, tension: 0, spanGaps: false },
+        { type: 'bar', label: 'APR', data: aprs, backgroundColor: C.positiveFill, borderColor: C.positive, borderWidth: 1 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      scales: {
+        x: { grid: { display: false }, ticks: { color: C.faint, maxTicksLimit: 16 } },
+        y: { grid: { color: C.grid }, ticks: { color: C.faint, callback: v => v + '%' },
+             title: { display: true, text: 'APR (annualized)', color: C.faint } },
+      },
+      plugins: {
+        legend: { labels: { color: C.muted } },
+        tooltip: { ...TOOLTIP_STYLE, callbacks: {
+          title: items => {
+            const b = bars[items[0].dataIndex];
+            return `${fmtDate(b.t0)} → ${fmtDate(b.t1)} (${b.days}d)`;
+          },
+          label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y == null ? '—' : ctx.parsed.y.toFixed(2) + '%'}`,
+        } },
+      },
+    },
+  });
+}
+
+function renderAll() {
+  const d = state.data[state.vault];
+  if (!d) return;
+  renderTabs();
+  renderCards(d);
+  renderPriceChart(d);
+  renderAprChart(d);
+}
+
+// ---------- controls ----------
+function wireSeg(id, onPick) {
+  const seg = document.getElementById(id);
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+      onPick(b.dataset.v);
+    };
+  });
+}
+wireSeg('granularity', v => {
+  state.granularity = v;
+  state.window = WINDOW_DEFAULTS[v];
+  document.getElementById('window').value = state.window;
+  // bucket mode is meaningless for daily bars
+  document.querySelectorAll('#bucketmode button').forEach(b => { b.disabled = v === 'daily'; });
+  renderAprChart(state.data[state.vault]);
+});
+wireSeg('bucketmode', v => { state.mode = v; renderAprChart(state.data[state.vault]); });
+document.getElementById('window').onchange = e => {
+  const n = Math.max(1, Math.floor(Number(e.target.value) || 1));
+  e.target.value = n;
+  state.window = n;
+  renderAprChart(state.data[state.vault]);
+};
+
+// ---------- boot ----------
+fetchAll().then(renderAll).catch(err => {
+  const el = document.getElementById('error');
+  el.style.display = 'block';
+  el.textContent = 'Failed to load data: ' + err.message;
+});
+</script>
+</body>
+</html>
